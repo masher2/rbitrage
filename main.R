@@ -9,7 +9,7 @@ library(dplyr)
 library(tidyr)
 
 # Get markets ####
-check_for_arbitrage <- function(.threshold = 1.0075) {
+check_for_arbitrage <- function(.threshold = 1.0075, .sound = TRUE) {
   market_summaries_response <- bt_getmarketsummaries()
   market_summaries <- market_summaries_response$result
   market_summaries <- market_summaries %>% 
@@ -35,7 +35,9 @@ check_for_arbitrage <- function(.threshold = 1.0075) {
     arrange(desc(arbitrage_btc_eth))
   
   if(sum(arbitrage_df$arbitrage_btc_eth > .threshold, na.rm = TRUE) > 0) {
-    beepr::beep(5)
+    if(.sound) {
+      beepr::beep(5)
+    }
     cat("There's arbitrage!\n")
     print(arbitrage_df %>% filter(arbitrage_btc_eth > .threshold))
   }
