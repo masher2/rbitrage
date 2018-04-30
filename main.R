@@ -8,8 +8,10 @@ library(bittrex)
 library(dplyr)
 library(tidyr)
 
+N_SNAPSHOTS <- 500
+
 # Get markets ####
-check_for_arbitrage <- function(.threshold = 1.0075, .sound = TRUE) {
+check_for_arbitrage <- function(.threshold = 1.0075, .fee = .0025, .sound = TRUE) {
   market_summaries_response <- bt_getmarketsummaries()
   market_summaries <- market_summaries_response$result
   market_summaries <- market_summaries %>% 
@@ -31,19 +33,35 @@ check_for_arbitrage <- function(.threshold = 1.0075, .sound = TRUE) {
   
   arbitrage_df <- inner_join(bid, ask, by = 'market_symbol', suffix = c('_BID', '_ASK')) %>% 
     select(market_symbol, starts_with('BTC'), starts_with('ETH'), starts_with('USDT')) %>% 
-    mutate(arbitrage_btc_eth = eth_btc / (BTC_ASK / ETH_BID)) %>% 
-    arrange(desc(arbitrage_btc_eth))
+    mutate(
+      arbitrage_btc_eth_indirect = eth_btc / (BTC_ASK / ETH_BID),
+      arbitrage_btc_eth_direct = 1 / arbitrage_btc_eth_indirect
+    ) %>% 
+    mutate(
+      indirect_gain = arbitrage_btc_eth_indirect * ((1 - .fee) ^ 3) - 1,
+      direct_gain = arbitrage_btc_eth_direct * ((1 - .fee) ^ 3) - 1
+    ) %>% 
+    arrange(desc(pmax(arbitrage_btc_eth_direct, arbitrage_btc_eth_indirect)))
   
-  if(sum(arbitrage_df$arbitrage_btc_eth > .threshold, na.rm = TRUE) > 0) {
-    if(.sound) {
-      beepr::beep(5)
-    }
-    cat("There's arbitrage!\n")
-    print(arbitrage_df %>% filter(arbitrage_btc_eth > .threshold))
-  }
+  arbitrage_snapshot = arbitrage_df %>% 
+    select(market_symbol, indirect_gain, direct_gain) %>% 
+    gather(key = 'type', value = 'gain', indirect_gain, direct_gain, na.rm = TRUE) %>%
+    mutate(timestamp = as.numeric(Sys.time())) %>% 
+    filter(gain > 0)
+  
+  return(list(arbitrage_snapshot = arbitrage_snapshot, arbitrage_df = arbitrage_df))
 }
 
-while(TRUE) {
+arbitrage_snapshots = data_frame(
+  market_symbol = character(),
+  type = character(),
+  gain = numeric(),
+  timestamp = numeric()
+)
+
+for(i in 1:N_SNAPSHOTS) {
+  arbitrage_snapshots <<- arbitrage_snapshots %>% bind_rows(check_for_arbitrage()$arbitrage_snapshot)
   Sys.sleep(1)
-  check_for_arbitrage()
 }
+
+write.csv('data/arbitrage_snapshots.csv', row.names = FALSE)
