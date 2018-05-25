@@ -3,11 +3,15 @@
 # devtools::install_github("ropensci/bittrex")
 # devtools::install_github('toneloy/tradeR', auth_token = Sys.getenv('GITHUB_TOKEN'))
 
-# Load packages ####
+# Load packages -----------------------------------------------------------
+
 library(bittrex)
 library(dplyr)
 library(tidyr)
 library(lubridate)
+
+
+# Initial constants -------------------------------------------------------
 
 DATA_DIR <- 'data'
 PROCESSED_DATA_DIR <- file.path(DATA_DIR, 'processed')
@@ -16,7 +20,9 @@ N_SNAPSHOTS <- 60
 INTERVAL <- 1
 FILE_NAME <- 'arbitrage_snapshots.csv'
 
-# Get markets ####
+
+# Check for arbitrage -----------------------------------------------------
+
 check_for_arbitrage <- function(.threshold = 1.0075, .fee = .0025, .sound = TRUE) {
   market_summaries_response <- bt_getmarketsummaries()
   market_summaries <- market_summaries_response$result
@@ -88,6 +94,9 @@ check_for_arbitrage <- function(.threshold = 1.0075, .fee = .0025, .sound = TRUE
   
   return(list(arbitrage_snapshot = arbitrage_snapshot, arbitrage_df = arbitrage_df))
 }
+
+
+# Arbitrage snapshots -----------------------------------------------------
 
 arbitrage_snapshots = data_frame(
   market_symbol = character(),
