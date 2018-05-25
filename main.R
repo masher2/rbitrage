@@ -28,6 +28,7 @@ check_for_arbitrage <- function(.threshold = 1.0075, .fee = .0025, .sound = TRUE
   market_summaries <- market_summaries_response$result
   market_summaries <- market_summaries %>% 
     separate(market_name, into = c('base_symbol', 'market_symbol'), sep = '-')
+  t_stamp <- Sys.time()
   
   bid <- market_summaries %>% 
     select(market_symbol, base_symbol, bid) %>% 
@@ -68,29 +69,12 @@ check_for_arbitrage <- function(.threshold = 1.0075, .fee = .0025, .sound = TRUE
     ) %>% 
     arrange(desc(pmax(arbitrage_btc_eth_direct, arbitrage_btc_eth_indirect)))
   
-  btc_eth_arbitrage_snapshot = arbitrage_df %>% 
-    select(market_symbol, btc_eth_indirect_gain, btc_eth_direct_gain) %>% 
-    gather(key = 'type', value = 'gain', btc_eth_indirect_gain, btc_eth_direct_gain, na.rm = TRUE) %>%
-    mutate(timestamp = as.numeric(Sys.time())) %>% 
+  arbitrage_snapshot <- 
+    arbitrage_df %>% 
+    select(market_symbol, ends_with("gain")) %>% 
+    gather("type", "gain", ends_with("gain"), na.rm = TRUE) %>%
+    mutate(timestamp = as.numeric(t_stamp)) %>% 
     filter(gain > 0)
-  
-  usdt_btc_arbitrage_snapshot = arbitrage_df %>% 
-    select(market_symbol, usdt_btc_indirect_gain, usdt_btc_direct_gain) %>% 
-    gather(key = 'type', value = 'gain', usdt_btc_indirect_gain, usdt_btc_direct_gain, na.rm = TRUE) %>%
-    mutate(timestamp = as.numeric(Sys.time())) %>% 
-    filter(gain > 0)
-  
-  usdt_eth_arbitrage_snapshot = arbitrage_df %>% 
-    select(market_symbol, usdt_eth_indirect_gain, usdt_eth_direct_gain) %>% 
-    gather(key = 'type', value = 'gain', usdt_eth_indirect_gain, usdt_eth_direct_gain, na.rm = TRUE) %>%
-    mutate(timestamp = as.numeric(Sys.time())) %>% 
-    filter(gain > 0)
-  
-  arbitrage_snapshot <- bind_rows(list(
-    btc_eth_arbitrage_snapshot,
-    usdt_btc_arbitrage_snapshot,
-    usdt_eth_arbitrage_snapshot
-  ))
   
   return(list(arbitrage_snapshot = arbitrage_snapshot, arbitrage_df = arbitrage_df))
 }
