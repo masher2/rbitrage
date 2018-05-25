@@ -1,7 +1,7 @@
-# install.packages('devtools')
-# install.packages('beepr')
+# install.packages("devtools")
+# install.packages("beepr")
 # devtools::install_github("ropensci/bittrex")
-# devtools::install_github('toneloy/tradeR', auth_token = Sys.getenv('GITHUB_TOKEN'))
+# devtools::install_github("toneloy/tradeR", auth_token = Sys.getenv("GITHUB_TOKEN"))
 
 # Load packages -----------------------------------------------------------
 
@@ -13,44 +13,50 @@ library(lubridate)
 
 # Initial constants -------------------------------------------------------
 
-DATA_DIR <- 'data'
-PROCESSED_DATA_DIR <- file.path(DATA_DIR, 'processed')
+DATA_DIR <- "data"
+PROCESSED_DATA_DIR <- file.path(DATA_DIR, "processed")
 
 N_SNAPSHOTS <- 60
 INTERVAL <- 1
-FILE_NAME <- 'arbitrage_snapshots.csv'
+FILE_NAME <- "arbitrage_snapshots.csv"
 
 
 # Check for arbitrage -----------------------------------------------------
 
 check_for_arbitrage <- function(.threshold = 1.0075, .fee = .0025, .sound = TRUE) {
-  market_summaries_response <- bt_getmarketsummaries()
-  market_summaries <- market_summaries_response$result
-  market_summaries <- market_summaries %>% 
-    separate(market_name, into = c('base_symbol', 'market_symbol'), sep = '-')
   t_stamp <- Sys.time()
+  market_summaries_response <- bt_getmarketsummaries()
+  market_summaries <- 
+    market_summaries_response$result %>% 
+    separate(market_name,
+             into = c("base_symbol", "market_symbol"),
+             sep = "-")
   
-  bid <- market_summaries %>% 
+  bid <- 
+    market_summaries %>% 
     select(market_symbol, base_symbol, bid) %>% 
     spread(base_symbol, bid)
   
-  ask <- market_summaries %>% 
+  ask <-
+    market_summaries %>% 
     select(market_symbol, base_symbol, ask) %>% 
     spread(base_symbol, ask)
   
+  base_prices_ask <- ask %>% filter(market_symbol %in% c("BTC", "ETH"))
+  eth_btc_ask <- base_prices_ask %>% filter(market_symbol == "ETH") %>% pull(BTC)
+  eth_usdt_ask <- base_prices_ask %>% filter(market_symbol == "ETH") %>% pull(USDT)
+  btc_usdt_ask <- base_prices_ask %>% filter(market_symbol == "BTC") %>% pull(USDT)
   
-  base_prices_ask <- ask %>% filter(market_symbol %in% c('BTC', 'ETH'))
-  eth_btc_ask <- base_prices_ask %>% filter(market_symbol == 'ETH') %>% pull(BTC)
-  eth_usdt_ask <- base_prices_ask %>% filter(market_symbol == 'ETH') %>% pull(USDT)
-  btc_usdt_ask <- base_prices_ask %>% filter(market_symbol == 'BTC') %>% pull(USDT)
+  base_prices_bid <- bid %>% filter(market_symbol %in% c("BTC", "ETH"))
+  eth_btc_bid <- base_prices_bid %>% filter(market_symbol == "ETH") %>% pull(BTC)
+  eth_usdt_bid <- base_prices_bid %>% filter(market_symbol == "ETH") %>% pull(USDT)
+  btc_usdt_bid <- base_prices_bid %>% filter(market_symbol == "BTC") %>% pull(USDT)
   
-  base_prices_bid <- bid %>% filter(market_symbol %in% c('BTC', 'ETH'))
-  eth_btc_bid <- base_prices_bid %>% filter(market_symbol == 'ETH') %>% pull(BTC)
-  eth_usdt_bid <- base_prices_bid %>% filter(market_symbol == 'ETH') %>% pull(USDT)
-  btc_usdt_bid <- base_prices_bid %>% filter(market_symbol == 'BTC') %>% pull(USDT)
-  
-  arbitrage_df <- inner_join(bid, ask, by = 'market_symbol', suffix = c('_BID', '_ASK')) %>% 
-    select(market_symbol, starts_with('BTC'), starts_with('ETH'), starts_with('USDT')) %>% 
+  arbitrage_df <-
+    inner_join(bid, ask,
+               by = "market_symbol",
+               suffix = c("_BID", "_ASK")) %>% 
+    select(market_symbol, matches("^(BTC|ETH|USDT)")) %>% 
     mutate(
       arbitrage_btc_eth_indirect = eth_btc_ask / (BTC_ASK / ETH_BID),
       arbitrage_btc_eth_direct = (BTC_BID / ETH_ASK) / eth_btc_bid,
@@ -60,12 +66,12 @@ check_for_arbitrage <- function(.threshold = 1.0075, .fee = .0025, .sound = TRUE
       arbitrage_usdt_eth_direct = (USDT_BID / ETH_ASK) / eth_usdt_bid
     ) %>% 
     mutate(
-      btc_eth_indirect_gain = arbitrage_btc_eth_indirect * ((1 - .fee) ^ 3) - 1,
-      btc_eth_direct_gain = arbitrage_btc_eth_direct * ((1 - .fee) ^ 3) - 1,
-      usdt_btc_indirect_gain = arbitrage_usdt_btc_indirect * ((1 - .fee) ^ 3) - 1,
-      usdt_btc_direct_gain = arbitrage_usdt_btc_direct * ((1 - .fee) ^ 3) - 1,
-      usdt_eth_indirect_gain = arbitrage_usdt_eth_indirect * ((1 - .fee) ^ 3) - 1,
-      usdt_eth_direct_gain = arbitrage_usdt_eth_direct * ((1 - .fee) ^ 3) - 1
+      btc_eth_indirect_gain = arbitrage_btc_eth_indirect*((1 - .fee)^3) - 1,
+      btc_eth_direct_gain = arbitrage_btc_eth_direct*((1 - .fee)^3) - 1,
+      usdt_btc_indirect_gain = arbitrage_usdt_btc_indirect*((1 - .fee)^3) - 1,
+      usdt_btc_direct_gain = arbitrage_usdt_btc_direct*((1 - .fee)^3) - 1,
+      usdt_eth_indirect_gain = arbitrage_usdt_eth_indirect*((1 - .fee)^3) - 1,
+      usdt_eth_direct_gain = arbitrage_usdt_eth_direct*((1 - .fee)^3) - 1
     ) %>% 
     arrange(desc(pmax(arbitrage_btc_eth_direct, arbitrage_btc_eth_indirect)))
   
@@ -90,13 +96,17 @@ arbitrage_snapshots = data_frame(
 )
 
 for(i in 1:N_SNAPSHOTS) {
-  cat(sprintf('Working on iteration %s: ', i))
+  cat(sprintf("Working on iteration %s: ", i))
+  
   snapshot <- check_for_arbitrage()$arbitrage_snapshot
   arbitrage_snapshots <- arbitrage_snapshots %>% bind_rows(snapshot)
-  cat(sprintf('%s arbitrages\n', nrow(snapshot)))
+  cat(sprintf("%s arbitrages\n", nrow(snapshot)))
+  
   Sys.sleep(INTERVAL)
 }
 
-cat('Exporting data')
+cat("Exporting data")
 arbitrage_snapshots <- arbitrage_snapshots %>% mutate(timestamp = as_datetime(timestamp))
-write.csv(arbitrage_snapshots, file.path(PROCESSED_DATA_DIR, FILE_NAME), row.names = FALSE)
+write.csv(arbitrage_snapshots,
+          file.path(PROCESSED_DATA_DIR, FILE_NAME),
+          row.names = FALSE)
